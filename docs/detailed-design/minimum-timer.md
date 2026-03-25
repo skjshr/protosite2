@@ -10,7 +10,7 @@
 ## 2. 今回のスコープ
 
 - 複数の用途フィールドを作成できる
-- 各フィールドは `id`, `name`, `theme`, `isPublic` を持つ
+- 各フィールドは `id`, `userId`, `name`, `theme`, `isPublic` を持つ
 - セッションの操作は以下のみ
 1. 開始
 2. 休憩
@@ -18,13 +18,12 @@
 4. 終了
 5. 結果表示
 - スコアと XP を計算して表示
-- 終了済みセッションを localStorage に保存
+- 終了済みセッションを DB（SQLite）に保存
 - ホームに累計 XP / 累計有効時間 / 最近5件を表示
 - フィールド一覧からセッション開始できる
 
 今回はあえて入れていないもの:
 
-- DB 保存
 - 認証
 - 図鑑、ランキング
 - アニメーションや見た目の作り込み
@@ -37,6 +36,8 @@
   画面表示、ボタン操作、状態の切り替え（UI層）
 - `src/lib`:
   セッション遷移、時間計算、スコア計算（ドメイン層）
+- `src/server`:
+  DBアクセス、集計、永続化（サーバー層）
 - `src/types`:
   データ形状の定義（型層）
 
@@ -55,19 +56,22 @@
   - XP 計算（`floor(score)`）
 - `src/lib/time-format.ts`
   - 秒を `mm:ss` に整形
-- `src/lib/session-history-storage.ts`
-  - localStorage からの読み込み
-  - 終了済みセッションの追記保存
-  - 累計値算出、フィールド単位集計、最近5件抽出
-- `src/lib/field-storage.ts`
-  - フィールドの作成
-  - localStorage からのフィールド読み込み
+- `src/lib/api-client.ts`
+  - クライアントからAPIへの通信
 - `src/lib/field-theme.ts`
   - theme 表示名と説明文の差分管理（複雑分岐は入れない）
+- `src/server/db/client.ts`
+  - Prisma Client の生成と共有
+- `src/server/repositories/*`
+  - User / Field / Session ごとの DB 操作
+- `src/server/services/home-data-service.ts`
+  - ホーム表示用データの組み立て
+- `src/app/api/*/route.ts`
+  - UI から呼ぶ API エンドポイント（Server 側）
 - `src/types/session.ts`
   - `ActiveSession` と `EndedSession` の型定義
 - `src/types/session-history.ts`
-  - localStorage に保存するセッション型
+  - 画面表示用のセッション履歴型
 - `src/types/field.ts`
   - フィールド型と theme 型
 
@@ -170,35 +174,21 @@ XP:
 4. 仕様の倍率変更は `scoring.ts` だけを編集する
 5. 例外メッセージはユーザー向け表示を意識して明快にする
 
-## 11. 次の拡張候補（この実装を壊さない順）
+## 11. DB 永続化の補足
 
-1. `server` 層を追加してセッション保存 API を作る
-2. 結果の永続化（`sessions` テーブル想定）
-3. 固定用途を用途選択 UI に差し替える
-4. テスト追加（`session.ts` と `scoring.ts` を優先）
+使用技術:
 
-## 12. localStorage 永続化の補足
+- Prisma
+- SQLite
 
-保存キー:
+今回の方針:
 
-- `fields`
-- `savedSessions`
+1. 暫定ユーザー（`demo-user`）を seed で1件作る
+2. `Field` と `Session` は `userId` を持つ
+3. 新規作成・新規終了セッションのみ DB へ保存する
+4. 旧 localStorage データは自動移行しない（無視）
 
-保存項目（要求どおり）:
+## 12. 次の拡張候補（この実装を壊さない順）
 
-- `fieldName`
-- `fieldId`
-- `startedAt`
-- `endedAt`
-- `effectiveSeconds`
-- `score`
-- `xp`
-
-読み込み時の方針:
-
-1. JSON の parse に失敗したら空配列にフォールバック
-2. 想定型でない要素は除外
-3. `endedAt` の降順で並べる
-
-この実装は「DB の前段としての簡易永続化」なので、
-認証やユーザー分離はまだ入れていません。
+1. 認証導入（`demo-user` 固定をログインユーザーへ置換）
+2. `session.ts` / `scoring.ts` のテスト追加

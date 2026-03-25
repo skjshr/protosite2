@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum FieldTheme {
+  miner
+  fisher
+  collector
+}
+
+enum SessionStatus {
+  working
+  paused
+  ended
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  totalXp   Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  fields    Field[]
+  sessions  Session[]
+}
+
+model Field {
+  id                   String     @id @default(cuid())
+  userId               String
+  name                 String
+  theme                FieldTheme
+  isPublic             Boolean    @default(false)
+  totalEffectiveSeconds Int       @default(0)
+  totalSessions        Int        @default(0)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions             Session[]
+
+  @@index([userId])
+}
+
+model Session {
+  id                     String        @id @default(cuid())
+  userId                 String
+  fieldId                String
+  status                 SessionStatus
+  startedAt              DateTime
+  pausedAt               DateTime?
+  endedAt                DateTime
+  pauseAccumulatedSeconds Int
+  effectiveSeconds       Int
+  score                  Float
+  xpGained               Int
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  field                  Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@index([userId, endedAt])
+  @@index([fieldId, endedAt])
+}

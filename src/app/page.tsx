@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createField, loadFields } from "@/lib/field-storage";
-import { getThemeDescription, getThemeLabel } from "@/lib/field-theme";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  appendSavedSession,
-  calculateFieldSessionTotals,
-  calculateSessionHistorySummary,
-  getRecentSavedSessions,
-  loadSavedSessions,
-} from "@/lib/session-history-storage";
+  createFieldRequest,
+  fetchHomeData,
+  saveEndedSessionRequest,
+} from "@/lib/api-client";
+import { getThemeDescription, getThemeLabel } from "@/lib/field-theme";
 import {
   calculateCurrentEffectiveSeconds,
   createSession,
@@ -22,8 +19,9 @@ import {
   formatSecondsToMinutesAndSeconds,
 } from "@/lib/time-format";
 import type { ActiveSession, EndedSession } from "@/types/session";
-import type { SavedSession } from "@/types/session-history";
 import type { Field, FieldTheme } from "@/types/field";
+import type { FieldSessionTotals, SavedSession } from "@/types/session-history";
+import type { SessionHistorySummary } from "@/types/session-history";
 
 function useNowTick(
   activeSession: ActiveSession | null,
@@ -65,39 +63,48 @@ export default function Home() {
   const [result, setResult] = useState<EndedSession | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
+  const [fieldTotals, setFieldTotals] = useState<Record<string, FieldSessionTotals>>(
+    {},
+  );
+  const [historySummary, setHistorySummary] = useState<SessionHistorySummary>({
+    totalXp: 0,
+    totalEffectiveSeconds: 0,
+  });
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldTheme, setNewFieldTheme] = useState<FieldTheme>("miner");
   const [newFieldIsPublic, setNewFieldIsPublic] = useState(false);
+  const [isLoadingHomeData, setIsLoadingHomeData] = useState(true);
   // ドメイン関数から投げられたエラーを UI で可視化する。
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const sessionActionLockRef = useRef(false);
   const fieldActionLockRef = useRef(false);
   const { now, syncNow } = useNowTick(activeSession);
 
-  useEffect(() => {
-    // localStorage の読み込みは副作用なので、初回レンダー後に実行する。
-    setSavedSessions(loadSavedSessions());
-    setFields(loadFields());
+  const loadHomeData = useCallback(async () => {
+    const homeData = await fetchHomeData();
+    setFields(homeData.fields);
+    setSavedSessions(homeData.recentSessions);
+    setFieldTotals(homeData.fieldTotals);
+    setHistorySummary(homeData.summary);
   }, []);
 
-  const historySummary = useMemo(() => {
-    return calculateSessionHistorySummary(savedSessions);
-  }, [savedSessions]);
-
-  const recentSavedSessions = useMemo(() => {
-    return getRecentSavedSessions(savedSessions, 5);
-  }, [savedSessions]);
-
-  const totalsByField = useMemo(() => {
-    return calculateFieldSessionTotals(savedSessions);
-  }, [savedSessions]);
+  useEffect(() => {
+    // DB由来データの読込は副作用なので初回レンダー後に行う。
+    loadHomeData()
+      .catch((error) => {
+        setErrorMessage(error instanceof Error ? error.message : "Failed to load home data.");
+      })
+      .finally(() => {
+        setIsLoadingHomeData(false);
+      });
+  }, [loadHomeData]);
 
   // 表示秒数は保存せず、毎回「時刻情報」から導出する。
   const effectiveSeconds = activeSession
     ? calculateCurrentEffectiveSeconds(activeSession, now)
     : 0;
 
-  function handleCreateField() {
+  async function handleCreateField() {
     if (fieldActionLockRef.current) {
       return;
     }
@@ -111,16 +118,18 @@ export default function Home() {
     }
 
     try {
-      const nextFields = createField(fields, {
+      await createFieldRequest({
         name: trimmedName,
         theme: newFieldTheme,
         isPublic: newFieldIsPublic,
       });
-      setFields(nextFields);
+      await loadHomeData();
       setNewFieldName("");
       setNewFieldTheme("miner");
       setNewFieldIsPublic(false);
       setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create field.");
     } finally {
       fieldActionLockRef.current = false;
     }
@@ -190,7 +199,7 @@ export default function Home() {
     }
   }
 
-  function handleEndSession() {
+  async function handleEndSession() {
     if (sessionActionLockRef.current) {
       return;
     }
@@ -204,8 +213,25 @@ export default function Home() {
     try {
       // 終了処理で score / xp まで確定し、結果画面に必要な値を一度に作る。
       const endedSession = endSession(activeSession, new Date());
-      setResult(endedSession);
-      setSavedSessions(appendSavedSession(endedSession, savedSessions));
+      const savedSession = await saveEndedSessionRequest({
+        fieldId: endedSession.fieldId,
+        startedAt: endedSession.startedAt,
+        endedAt: endedSession.endedAt,
+        pauseAccumulatedSeconds: endedSession.pauseAccumulatedSeconds,
+      });
+      setResult({
+        fieldId: savedSession.fieldId,
+        fieldName: savedSession.fieldName,
+        status: "ended",
+        startedAt: savedSession.startedAt,
+        pausedAt: null,
+        endedAt: savedSession.endedAt,
+        pauseAccumulatedSeconds: savedSession.pauseAccumulatedSeconds,
+        effectiveSeconds: savedSession.effectiveSeconds,
+        score: savedSession.score,
+        xp: savedSession.xpGained,
+      });
+      await loadHomeData();
       // 終了後に activeSession を残すと二重終了できてしまうため即クリアする。
       setActiveSession(null);
       setErrorMessage(null);
@@ -265,9 +291,10 @@ export default function Home() {
 
       <section className="panel">
         <h2>用途フィールド一覧</h2>
+        {isLoadingHomeData && <p>読み込み中...</p>}
         {fields.length === 0 && <p>まだ用途フィールドがありません。</p>}
         {fields.map((field) => {
-          const fieldTotals = totalsByField[field.id];
+          const eachFieldTotals = fieldTotals[field.id];
           return (
             <div key={field.id}>
               <p>
@@ -278,9 +305,9 @@ export default function Home() {
               <p>
                 累計有効時間:{" "}
                 {formatSecondsToMinutesAndSeconds(
-                  fieldTotals?.totalEffectiveSeconds ?? 0,
+                  eachFieldTotals?.totalEffectiveSeconds ?? 0,
                 )}{" "}
-                / 累計セッション: {fieldTotals?.totalSessions ?? 0}
+                / 累計セッション: {eachFieldTotals?.totalSessions ?? 0}
               </p>
               <button
                 onClick={() => handleStartSession(field.id, field.name)}
@@ -295,8 +322,8 @@ export default function Home() {
 
       <section className="panel">
         <h2>最近のセッション（5件）</h2>
-        {recentSavedSessions.length === 0 && <p>まだセッションがありません。</p>}
-        {recentSavedSessions.map((savedSession) => (
+        {savedSessions.length === 0 && <p>まだセッションがありません。</p>}
+        {savedSessions.map((savedSession) => (
           <div key={`${savedSession.endedAt}-${savedSession.startedAt}`}>
             <p>用途: {savedSession.fieldName}</p>
             <p>fieldId: {savedSession.fieldId}</p>

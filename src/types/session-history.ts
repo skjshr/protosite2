@@ -14,7 +14,6 @@ export interface SessionHistorySummary {
 }
 
 export interface FieldSessionTotals {
-  totalXp: number;
   totalEffectiveSeconds: number;
   totalSessions: number;
 }
