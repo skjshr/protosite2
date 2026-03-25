@@ -1,0 +1,33 @@
+# Node.js の依存パッケージ
+node_modules/
+
+# Next.js のビルド生成物
+.next/
+out/
+
+# 汎用的なビルド成果物
+dist/
+build/
+
+# テスト結果やカバレッジ
+coverage/
+
+# 環境変数ファイル
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ログ
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS やエディタが勝手に作る不要ファイル
+.DS_Store
+Thumbs.db
+
+# TypeScript のビルド情報
+*.tsbuildinfo

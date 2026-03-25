@@ -1,0 +1,30 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
+
+.container {
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #ccc;
+}
+
+button {
+  margin-right: 8px;
+  margin-top: 8px;
+}
+
+.error {
+  color: #b00020;
+  margin-top: 12px;
+}
