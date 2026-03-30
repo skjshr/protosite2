@@ -1,7 +1,9 @@
 ﻿import type { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import GitHubProvider from "next-auth/providers/github";
+import GoogleProvider from "next-auth/providers/google";
 import TwitterProvider from "next-auth/providers/twitter";
+import { findOrCreateDevUser } from "@/server/repositories/user-repository";
 import { resolveUserByOAuthProfile } from "@/server/services/user-service";
 
 function buildProviders() {
@@ -41,15 +43,54 @@ function buildProviders() {
     );
   }
 
+  const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
+  const devUsername = process.env.DEV_LOGIN_USERNAME;
+  const devPassword = process.env.DEV_LOGIN_PASSWORD;
+
+  if (devLoginEnabled && devUsername && devPassword) {
+    providers.push(
+      CredentialsProvider({
+        id: "dev-credentials",
+        name: "開発用ログイン",
+        credentials: {
+          username: { label: "Username", type: "text" },
+          password: { label: "Password", type: "password" },
+        },
+        async authorize(credentials) {
+          if (
+            credentials?.username !== devUsername
+            || credentials?.password !== devPassword
+          ) {
+            return null;
+          }
+
+          const devUser = await findOrCreateDevUser(devUsername);
+          return {
+            id: devUser.id,
+            name: devUsername,
+            onboardingCompleted: devUser.onboardingCompleted,
+          };
+        },
+      }),
+    );
+  }
+
   return providers;
 }
 
 export const authOptions: NextAuthOptions = {
   providers: buildProviders(),
+  session: {
+    strategy: "jwt",
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (!account) {
+      if (!account || account.provider === "dev-credentials") {
         return true;
+      }
+
+      if (account.provider === "github" && !user.email) {
+        return "/login?error=EmailRequired";
       }
 
       if (!profile) {
@@ -69,6 +110,9 @@ export const authOptions: NextAuthOptions = {
         return true;
       } catch (error) {
         console.error("SignIn error:", error);
+        if (account.provider === "github") {
+          return "/login?error=EmailRequired";
+        }
         return false;
       }
     },

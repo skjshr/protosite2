@@ -91,3 +91,24 @@ export async function updateUsername(userId: string, username: string, usernameN
     },
   });
 }
+
+export async function findOrCreateDevUser(username: string) {
+  const usernameNormalized = username.toLowerCase();
+
+  const existingUser = await prisma.user.findUnique({
+    where: {
+      usernameNormalized,
+    },
+  });
+  if (existingUser) {
+    return existingUser;
+  }
+
+  return prisma.user.create({
+    data: {
+      username,
+      usernameNormalized,
+      onboardingCompleted: true,
+    },
+  });
+}
