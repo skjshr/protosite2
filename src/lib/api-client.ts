@@ -1,21 +1,27 @@
-import type {
+﻿import type {
+  CollectionResponse,
   CreateFieldRequest,
   HomeDataResponse,
-  SaveEndedSessionRequest,
-  SaveEndedSessionResponse,
+  RankingResponse,
+  SaveEndedWorkSessionRequest,
+  SaveEndedWorkSessionResponse,
 } from "@/types/api";
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = "Request failed.";
+
     try {
-      const errorBody = (await response.json()) as { message?: string };
-      if (errorBody?.message) {
+      const errorBody = (await response.json()) as { error?: string; message?: string };
+      if (typeof errorBody.error === "string") {
+        message = errorBody.error;
+      } else if (typeof errorBody.message === "string") {
         message = errorBody.message;
       }
     } catch {
       // Keep the default message when JSON parse fails.
     }
+
     throw new Error(message);
   }
 
@@ -27,9 +33,7 @@ export async function fetchHomeData(): Promise<HomeDataResponse> {
   return parseJsonResponse<HomeDataResponse>(response);
 }
 
-export async function createFieldRequest(
-  payload: CreateFieldRequest,
-): Promise<void> {
+export async function createFieldRequest(payload: CreateFieldRequest): Promise<void> {
   const response = await fetch("/api/fields", {
     method: "POST",
     headers: {
@@ -38,12 +42,12 @@ export async function createFieldRequest(
     body: JSON.stringify(payload),
   });
 
-  await parseJsonResponse<{ id: string }>(response);
+  await parseJsonResponse<{ ok: true }>(response);
 }
 
-export async function saveEndedSessionRequest(
-  payload: SaveEndedSessionRequest,
-): Promise<SaveEndedSessionResponse> {
+export async function saveEndedWorkSessionRequest(
+  payload: SaveEndedWorkSessionRequest,
+): Promise<SaveEndedWorkSessionResponse> {
   const response = await fetch("/api/sessions/end", {
     method: "POST",
     headers: {
@@ -52,5 +56,15 @@ export async function saveEndedSessionRequest(
     body: JSON.stringify(payload),
   });
 
-  return parseJsonResponse<SaveEndedSessionResponse>(response);
+  return parseJsonResponse<SaveEndedWorkSessionResponse>(response);
+}
+
+export async function fetchCollection(): Promise<CollectionResponse> {
+  const response = await fetch("/api/collection", { method: "GET" });
+  return parseJsonResponse<CollectionResponse>(response);
+}
+
+export async function fetchRanking(): Promise<RankingResponse> {
+  const response = await fetch("/api/ranking", { method: "GET" });
+  return parseJsonResponse<RankingResponse>(response);
 }

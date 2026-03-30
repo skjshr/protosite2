@@ -7,61 +7,142 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum FieldTheme {
-  miner
-  fisher
-  collector
-}
-
-enum SessionStatus {
+enum WorkSessionStatus {
   working
   paused
   ended
 }
 
+enum ItemRarity {
+  common
+  rare
+  epic
+}
+
 model User {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  totalXp   Int       @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  fields    Field[]
-  sessions  Session[]
+  id                   String        @id @default(cuid())
+  username             String?       @unique
+  usernameNormalized   String?       @unique
+  primaryEmail         String?       @unique
+  onboardingCompleted  Boolean       @default(false)
+  totalXp              Int           @default(0)
+  totalEffectiveSeconds Int          @default(0)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  identities           Identity[]
+  fields               Field[]
+  workSessions         WorkSession[]
+  userItems            UserItem[]
+}
+
+model Identity {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  email             String?
+  normalizedEmail   String?
+  emailVerified     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
 model Field {
-  id                   String     @id @default(cuid())
-  userId               String
-  name                 String
-  theme                FieldTheme
-  isPublic             Boolean    @default(false)
-  totalEffectiveSeconds Int       @default(0)
-  totalSessions        Int        @default(0)
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions             Session[]
+  id                    String       @id @default(cuid())
+  userId                String
+  name                  String
+  themeId               String
+  isPublic              Boolean      @default(false)
+  totalEffectiveSeconds Int          @default(0)
+  totalSessions         Int          @default(0)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                 Theme        @relation(fields: [themeId], references: [id], onDelete: Restrict)
+  workSessions          WorkSession[]
 
   @@index([userId])
+  @@index([themeId])
 }
 
-model Session {
-  id                     String        @id @default(cuid())
-  userId                 String
-  fieldId                String
-  status                 SessionStatus
-  startedAt              DateTime
-  pausedAt               DateTime?
-  endedAt                DateTime
+model WorkSession {
+  id                      String            @id @default(cuid())
+  userId                  String
+  fieldId                 String
+  status                  WorkSessionStatus
+  startedAt               DateTime
+  pausedAt                DateTime?
+  endedAt                 DateTime?
   pauseAccumulatedSeconds Int
-  effectiveSeconds       Int
-  score                  Float
-  xpGained               Int
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  field                  Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  effectiveSeconds        Int
+  score                   Float
+  xpGained                Int
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  field                   Field             @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  userItems               UserItem[]
 
   @@index([userId, endedAt])
   @@index([fieldId, endedAt])
+}
+
+model Theme {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  displayName String
+  description String?
+  sortOrder   Int
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  fields      Field[]
+  themeItems  ThemeItem[]
+}
+
+model Item {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  rarity      ItemRarity
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  themeItems  ThemeItem[]
+  userItems   UserItem[]
+}
+
+model ThemeItem {
+  id          String    @id @default(cuid())
+  themeId     String
+  itemId      String
+  dropWeight  Int?
+  unlockLevel Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  theme       Theme     @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([themeId, itemId])
+  @@index([themeId])
+  @@index([itemId])
+}
+
+model UserItem {
+  id                    String       @id @default(cuid())
+  userId                String
+  itemId                String
+  acquiredAt            DateTime     @default(now())
+  acquiredWorkSessionId String?
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item                  Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  acquiredWorkSession   WorkSession? @relation(fields: [acquiredWorkSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([acquiredWorkSessionId])
 }

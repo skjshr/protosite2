@@ -1,61 +1,55 @@
+﻿import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { createFieldForUser } from "@/server/repositories/field-repository";
-import { getOrCreateDefaultUser } from "@/server/repositories/user-repository";
+import { authOptions } from "@/lib/auth-options";
 import type { CreateFieldRequest } from "@/types/api";
+import * as fieldRepository from "@/server/repositories/field-repository";
 
-function isCreateFieldRequest(value: unknown): value is CreateFieldRequest {
-  if (!value || typeof value !== "object") {
-    return false;
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.name === "string" &&
-    (candidate.theme === "miner" ||
-      candidate.theme === "fisher" ||
-      candidate.theme === "collector") &&
-    typeof candidate.isPublic === "boolean"
-  );
+  try {
+    const fields = await fieldRepository.listFieldsByUserId(session.user.id);
+    return NextResponse.json({ fields }, { status: 200 });
+  } catch (error) {
+    console.error("Failed to list fields:", error);
+    return NextResponse.json({ error: "フィールド取得に失敗しました" }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  }
+
+  const body = (await request.json()) as Partial<CreateFieldRequest>;
+  if (!body || typeof body.name !== "string" || typeof body.themeKey !== "string" || typeof body.isPublic !== "boolean") {
+    return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
+  }
+
+  if (body.name.trim().length === 0) {
+    return NextResponse.json({ error: "フィールド名は必須です" }, { status: 400 });
+  }
+
   try {
-    const body: unknown = await request.json();
-    if (!isCreateFieldRequest(body)) {
-      return NextResponse.json(
-        { message: "Invalid field request." },
-        { status: 400 },
-      );
+    const theme = await fieldRepository.findThemeByKey(body.themeKey);
+    if (!theme) {
+      return NextResponse.json({ error: "themeKey が不正です" }, { status: 404 });
     }
 
-    const trimmedName = body.name.trim();
-    if (!trimmedName) {
-      return NextResponse.json(
-        { message: "Field name is required." },
-        { status: 400 },
-      );
-    }
-
-    const user = await getOrCreateDefaultUser();
-    const createdField = await createFieldForUser({
-      userId: user.id,
-      name: trimmedName,
-      theme: body.theme,
+    await fieldRepository.createFieldForUser({
+      userId: session.user.id,
+      name: body.name.trim(),
+      themeId: theme.id,
       isPublic: body.isPublic,
     });
 
-    return NextResponse.json({
-      id: createdField.id,
-      userId: createdField.userId,
-      name: createdField.name,
-      theme: createdField.theme,
-      isPublic: createdField.isPublic,
-    });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { message: "Failed to create field." },
-      { status: 500 },
-    );
+    console.error("Failed to create field:", error);
+    return NextResponse.json({ error: "フィールド作成に失敗しました" }, { status: 500 });
   }
 }

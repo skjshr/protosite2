@@ -1,4 +1,4 @@
-* {
+﻿* {
   box-sizing: border-box;
 }
 
@@ -8,15 +8,16 @@ body {
 }
 
 .container {
-  max-width: 480px;
-  margin: 40px auto;
+  max-width: 720px;
+  margin: 24px auto;
   padding: 0 16px;
 }
 
 .panel {
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: 12px;
+  padding: 12px;
   border: 1px solid #ccc;
+  border-radius: 6px;
 }
 
 button {
@@ -24,7 +25,36 @@ button {
   margin-top: 8px;
 }
 
+select,
+input {
+  margin-right: 8px;
+  margin-top: 8px;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+progress {
+  width: 100%;
+}
+
+.guest-banner {
+  background: #faf5e8;
+}
+
+.tab-panel {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .error {
   color: #b00020;
   margin-top: 12px;
+}
+
+ul {
+  padding-left: 20px;
 }

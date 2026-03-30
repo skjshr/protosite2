@@ -1,4 +1,6 @@
-export interface SavedSession {
+﻿import type { LevelProgress } from "@/types/level";
+
+export type SavedWorkSession = {
   fieldId: string;
   fieldName: string;
   startedAt: string;
@@ -6,14 +8,16 @@ export interface SavedSession {
   effectiveSeconds: number;
   score: number;
   xp: number;
-}
+};
 
-export interface SessionHistorySummary {
+export type SessionHistorySummary = {
   totalXp: number;
   totalEffectiveSeconds: number;
-}
+  level: number;
+  levelProgress: LevelProgress;
+};
 
-export interface FieldSessionTotals {
+export type FieldSessionTotals = {
   totalEffectiveSeconds: number;
   totalSessions: number;
-}
+};

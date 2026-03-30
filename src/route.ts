@@ -1,0 +1,1 @@
+// This file is deprecated. NextAuth handler moved to src/app/api/auth/[...nextauth]/route.ts

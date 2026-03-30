@@ -1,0 +1,5 @@
+﻿User-agent: *
+Disallow: /api/
+Disallow: /onboarding
+
+Sitemap: （後で追加）
