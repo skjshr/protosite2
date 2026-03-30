@@ -10,9 +10,13 @@
 
 実装前に以下を読むこと。
 
-1. docs/product-spec.md
-2. docs/coding-standards.md
-3. README.md
+1. docs/README.md — フォルダ構成と読む順序
+2. docs/project/coding-standards.md — 命名・責務分離・コメント方針
+3. docs/project/architecture.md — 技術スタック・レイヤー構成
+4. docs/requirements/product-spec.md — プロダクト思想・MVP範囲
+5. 実装対象の docs/features/ ファイル
+6. 実装対象の docs/design/ ファイル
+7. docs/tasks/ の作業指示ファイル（あれば）
 
 ## Working rules
 
